@@ -8,7 +8,7 @@
     "@rebble/clay": "^1.0.4"
   },
   "pebble": {
-    "displayName": "Scratch",
+    "displayName": "All-Arounder",
     "uuid": "daeff4a9-3ac2-4b5b-811e-fb357340a619",
     "sdkVersion": "3",
     "enableMultiJS": true,
