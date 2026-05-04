@@ -1,0 +1,5 @@
+build/
+node_modules/
+*.pbw
+.DS_Store
+Thumbs.db

@@ -1,0 +1,33 @@
+{
+  "name": "scratch-watchface",
+  "author": "ryang",
+  "version": "1.0.0",
+  "keywords": ["pebble-app"],
+  "private": true,
+  "dependencies": {
+    "@rebble/clay": "^1.0.4"
+  },
+  "pebble": {
+    "displayName": "Scratch",
+    "uuid": "daeff4a9-3ac2-4b5b-811e-fb357340a619",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": ["emery"],
+    "watchapp": {
+      "watchface": true
+    },
+    "messageKeys": [
+      "TEMPERATURE_C",
+      "UNIT",
+      "FETCH_WEATHER"
+    ],
+    "resources": {
+      "media": []
+    },
+    "capabilities": [
+      "health",
+      "location",
+      "configurable"
+    ]
+  }
+}
