@@ -10,6 +10,7 @@ static TextLayer *s_time_layer;
 static TextLayer *s_date_layer;
 static TextLayer *s_hr_layer;
 static TextLayer *s_steps_layer;
+static Layer     *s_quiet_layer;
 
 static char s_battery_buf[8];
 static char s_temp_buf[12];
@@ -18,7 +19,8 @@ static char s_date_buf[8];
 static char s_hr_buf[12];
 static char s_steps_buf[16];
 
-static bool s_have_temp = false;
+static bool s_have_temp    = false;
+static bool s_quiet_active = false;
 
 static void format_with_commas(int value, char *buf, size_t bufsize) {
   char tmp[16];
@@ -55,6 +57,29 @@ static GColor color_for_temp_f(int temp_f) {
   if (temp_f < 78)  return GColorMintGreen;
   if (temp_f < 90)  return GColorChromeYellow;
   return GColorRed;
+}
+
+// Draws a crescent moon (white body with a black "bite" offset to the upper-right)
+// when quiet time is active. Hidden otherwise.
+static void quiet_update_proc(Layer *layer, GContext *ctx) {
+  if (!s_quiet_active) return;
+  GRect b = layer_get_bounds(layer);
+  GPoint center = GPoint(b.size.w / 2, b.size.h / 2);
+  int r = (b.size.w < b.size.h ? b.size.w : b.size.h) / 2 - 1;
+
+  graphics_context_set_antialiased(ctx, true);
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_circle(ctx, center, r);
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_circle(ctx, GPoint(center.x + 4, center.y - 2), r);
+}
+
+static void update_quiet(void) {
+  bool now_quiet = quiet_time_is_active();
+  if (now_quiet != s_quiet_active) {
+    s_quiet_active = now_quiet;
+    if (s_quiet_layer) layer_mark_dirty(s_quiet_layer);
+  }
 }
 
 static void update_time(struct tm *tick_time) {
@@ -153,6 +178,7 @@ static void inbox_received_handler(DictionaryIterator *iter, void *context) {
 static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
   update_time(tick_time);
   update_health();
+  update_quiet();
   if (tick_time->tm_min % 30 == 0) {
     request_weather();
   }
@@ -175,9 +201,16 @@ static void main_window_load(Window *window) {
   GFont mid   = fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD);
   GFont big   = fonts_get_system_font(FONT_KEY_BITHAM_42_BOLD);
 
-  // Top corners: battery (left), temperature (right). Colors set dynamically.
-  s_battery_layer = make_label(GRect(4,           4, b.size.w/2 - 4, 22), small, GTextAlignmentLeft,  GColorMintGreen);
-  s_temp_layer    = make_label(GRect(b.size.w/2,  4, b.size.w/2 - 4, 22), small, GTextAlignmentRight, GColorLightGray);
+  // Top row: battery (left), quiet-time moon (center, only visible when active),
+  // temperature (right). Colors on battery/temp are set dynamically.
+  // Center moon reserves a 22x22 slot; battery/temp are squeezed to make room.
+  const int moon_size = 22;
+  const int moon_x = b.size.w / 2 - moon_size / 2;
+  s_battery_layer = make_label(GRect(4, 4, moon_x - 4, 22), small, GTextAlignmentLeft, GColorMintGreen);
+  s_quiet_layer   = layer_create(GRect(moon_x, 4, moon_size, moon_size));
+  layer_set_update_proc(s_quiet_layer, quiet_update_proc);
+  s_temp_layer    = make_label(GRect(moon_x + moon_size, 4, b.size.w - (moon_x + moon_size) - 4, 22),
+                               small, GTextAlignmentRight, GColorLightGray);
 
   // Center: time (white, focal) and date (soft gray, secondary).
   s_time_layer    = make_label(GRect(0,  70, b.size.w, 50), big, GTextAlignmentCenter, GColorWhite);
@@ -188,6 +221,7 @@ static void main_window_load(Window *window) {
   s_steps_layer   = make_label(GRect(b.size.w/2, 198, b.size.w/2 - 4, 22), small, GTextAlignmentRight, GColorMintGreen);
 
   layer_add_child(root, text_layer_get_layer(s_battery_layer));
+  layer_add_child(root, s_quiet_layer);
   layer_add_child(root, text_layer_get_layer(s_temp_layer));
   layer_add_child(root, text_layer_get_layer(s_time_layer));
   layer_add_child(root, text_layer_get_layer(s_date_layer));
@@ -202,6 +236,7 @@ static void main_window_unload(Window *window) {
   text_layer_destroy(s_date_layer);
   text_layer_destroy(s_hr_layer);
   text_layer_destroy(s_steps_layer);
+  layer_destroy(s_quiet_layer);
 }
 
 static void init(void) {
@@ -219,6 +254,7 @@ static void init(void) {
   update_health();
   update_battery(battery_state_service_peek());
   update_temp_display();
+  update_quiet();
 
   tick_timer_service_subscribe(MINUTE_UNIT, tick_handler);
   battery_state_service_subscribe(update_battery);
